@@ -3,7 +3,7 @@ import Combine
 
 
 struct ContentView: View {
-    @State private var gameState = GameState()
+    @State private var gameState = GameState(configuration: .fromProcessInfo())
     @State private var isRunning = false
     @State private var lastUpdate: Date = .now
 
@@ -39,6 +39,7 @@ struct ContentView: View {
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 2)
                         .padding(.horizontal)
+                        .accessibilityIdentifier("scoreLabel")
                 }
                 .padding(.top, 20)
                 .allowsHitTesting(false)  // UI가 터치를 가로채지 않도록
@@ -51,6 +52,7 @@ struct ContentView: View {
                             .font(.system(size: 40, weight: .black))
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 3)
+                            .accessibilityIdentifier("gameStateTitle")
                         
                         if gameState.isGameOver {
                             Text("최종 점수: \(gameState.score)")
@@ -73,6 +75,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.top, 8)
+                        .accessibilityIdentifier("startButton")
                         
                         VStack(spacing: 8) {
                             Text("🌍 지구 주변을 달리세요!")

@@ -170,6 +170,8 @@ for sf in swift_files:
         # Skip obvious framework callbacks
         if sym in {"makeUIView", "updateUIView", "makeCoordinator", "testExample", "testLaunch", "setUpWithError", "tearDownWithError", "testLaunchPerformance"}:
             continue
+        if "UITests" in rel and sym.startswith("test"):
+            continue
         refs = len(re.findall(rf"\b{re.escape(sym)}\b", repo_swift_text))
         if refs <= 1:
             add_finding(

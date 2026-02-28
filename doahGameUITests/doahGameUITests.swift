@@ -23,12 +23,28 @@ final class doahGameUITests: XCTestCase {
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    func testStartToGameOverFlow() throws {
         let app = XCUIApplication()
+        app.launchArguments += ["-ui-test-mode"]
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        let startButton = app.buttons["startButton"]
+        XCTAssertTrue(startButton.waitForExistence(timeout: 3))
+        startButton.tap()
+
+        // Button should disappear while running.
+        XCTAssertFalse(startButton.waitForExistence(timeout: 1))
+
+        // In UI test mode, deterministic obstacle should eventually end the game.
+        let gameStateTitle = app.staticTexts["gameStateTitle"]
+        XCTAssertTrue(gameStateTitle.waitForExistence(timeout: 3))
+
+        let gameOverPredicate = NSPredicate(format: "label CONTAINS %@", "게임 오버")
+        expectation(for: gameOverPredicate, evaluatedWith: gameStateTitle)
+        waitForExpectations(timeout: 5)
+
+        // Game over screen should show the restart/start button again.
+        XCTAssertTrue(startButton.waitForExistence(timeout: 2))
     }
 
     @MainActor

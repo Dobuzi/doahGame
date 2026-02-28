@@ -4,6 +4,22 @@ import simd
 
 // MARK: - Game State
 
+struct GameConfiguration {
+    var obstacleSpeed: Float = 1.5
+    var spawnInterval: TimeInterval = 2.0
+    var uiTestMode: Bool = false
+
+    static func fromProcessInfo() -> GameConfiguration {
+        var config = GameConfiguration()
+        if ProcessInfo.processInfo.arguments.contains("-ui-test-mode") {
+            config.uiTestMode = true
+            config.obstacleSpeed = 5.0
+            config.spawnInterval = 0.3
+        }
+        return config
+    }
+}
+
 
 struct Obstacle: Identifiable {
     let id = UUID()
@@ -19,6 +35,8 @@ struct Obstacle: Identifiable {
 
 @Observable
 class GameState {
+    private let configuration: GameConfiguration
+
     // Player (3D)
     var rabbitHeight: Float = 0.0  // Height above ground (0 = on ground)
     var velocity: Float = 0
@@ -33,8 +51,8 @@ class GameState {
     
     // Obstacles
     var obstacles: [Obstacle] = []
-    var obstacleSpeed: Float = 1.5
-    var spawnInterval: TimeInterval = 2.0
+    var obstacleSpeed: Float
+    var spawnInterval: TimeInterval
     private var spawnAccumulator: TimeInterval = 0
     
     // Scoring
@@ -43,6 +61,12 @@ class GameState {
     
     // State
     var isGameOver: Bool = false
+
+    init(configuration: GameConfiguration = .init()) {
+        self.configuration = configuration
+        self.obstacleSpeed = configuration.obstacleSpeed
+        self.spawnInterval = configuration.spawnInterval
+    }
     
     func reset() {
         rabbitHeight = 0
@@ -53,7 +77,8 @@ class GameState {
         passedObstacleIDs.removeAll()
         isGameOver = false
         spawnAccumulator = 0
-        obstacleSpeed = 1.5
+        obstacleSpeed = configuration.obstacleSpeed
+        spawnInterval = configuration.spawnInterval
     }
     
     func jump() {
@@ -140,6 +165,13 @@ class GameState {
     }
     
     private func spawnObstacle() {
+        if configuration.uiTestMode {
+            // Deterministic obstacle for stable UI-test collision flow.
+            let position = SIMD3<Float>(0, 0.4, -8.0)
+            obstacles.append(Obstacle(position: position, type: .asteroid))
+            return
+        }
+
         let types: [Obstacle.ObstacleType] = [.asteroid, .satellite, .meteor]
         let type = types.randomElement()!
         
@@ -162,4 +194,3 @@ class GameState {
         obstacles.append(Obstacle(position: position, type: type))
     }
 }
-
