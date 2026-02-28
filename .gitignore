@@ -1,3 +1,7 @@
 # Closed-loop pipeline generated artifacts
 .pipeline/output/*
 !.pipeline/output/.gitkeep
+
+# Local development artifacts
+.derived/
+.codex/
