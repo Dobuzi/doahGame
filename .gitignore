@@ -1,0 +1,3 @@
+# Closed-loop pipeline generated artifacts
+.pipeline/output/*
+!.pipeline/output/.gitkeep

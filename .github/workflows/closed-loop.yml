@@ -1,0 +1,174 @@
+name: closed-loop
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  discover:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Discover findings
+        run: make loop-discover
+      - name: Upload discover artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: closed-loop-discover
+          path: .pipeline/output/findings.json
+          retention-days: 14
+
+  plan:
+    needs: discover
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download discover artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: closed-loop-discover
+          path: .pipeline/output
+      - name: Build improvement plan
+        run: make loop-plan
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: closed-loop-plan
+          path: .pipeline/output/improvement-plan.md
+          retention-days: 14
+      - name: Upsert plan comment
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- closed-loop-plan -->';
+            const body = fs.readFileSync('.pipeline/output/improvement-plan.md', 'utf8');
+            const short = body.split('\n').slice(0, 40).join('\n');
+            const nextBody = `${marker}\n## Closed Loop - Plan\n\n${short}\n\n(Full report in artifact: closed-loop-plan)`;
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
+            const existing = comments.find(c => c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body: nextBody});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body: nextBody});
+            }
+
+  execute:
+    needs: plan
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download discover artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: closed-loop-discover
+          path: .pipeline/output
+      - name: Generate execution proposal patch
+        run: make loop-execute
+      - name: Upload execute artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: closed-loop-execute
+          path: .pipeline/output/execution-proposal.patch
+          retention-days: 14
+      - name: Upsert execute comment
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- closed-loop-execute -->';
+            const patch = fs.readFileSync('.pipeline/output/execution-proposal.patch', 'utf8');
+            const preview = patch.split('\n').slice(0, 80).join('\n');
+            const body = `${marker}\n## Closed Loop - Execute (Proposal Only)\n\n자동 커밋 없음 정책에 따라 적용 제안 패치만 생성했습니다.\n\n\`\`\`diff\n${preview}\n\`\`\`\n\n(Full patch in artifact: closed-loop-execute)`;
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
+            const existing = comments.find(c => c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body});
+            }
+
+  test:
+    needs: execute
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: make loop-test
+      - name: Upload test artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: closed-loop-test
+          path: |
+            .pipeline/output/test-report.md
+            .pipeline/output/test-status.json
+            .pipeline/output/xcodebuild-list.log
+            .pipeline/output/xcodebuild-test.log
+          retention-days: 14
+
+  finalize:
+    needs: [discover, plan, execute, test]
+    if: always()
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download discover artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: closed-loop-discover
+          path: .pipeline/output
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: closed-loop-plan
+          path: .pipeline/output
+      - name: Download execute artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: closed-loop-execute
+          path: .pipeline/output
+      - name: Download test artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: closed-loop-test
+          path: .pipeline/output
+      - name: Finalize loop status
+        run: make loop-finalize
+      - name: Upload final artifact bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: closed-loop-final
+          path: .pipeline/output/*
+          retention-days: 14
+      - name: Upsert final comment
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- closed-loop-final -->';
+            const finalReport = fs.existsSync('.pipeline/output/final-report.md') ? fs.readFileSync('.pipeline/output/final-report.md', 'utf8') : 'no final report';
+            const testReport = fs.existsSync('.pipeline/output/test-report.md') ? fs.readFileSync('.pipeline/output/test-report.md', 'utf8').split('\n').slice(0, 20).join('\n') : 'no test report';
+            const body = `${marker}\n## Closed Loop - Final\n\n${finalReport}\n\n### Test Snapshot\n\n${testReport}\n\nArtifacts: closed-loop-discover / closed-loop-plan / closed-loop-execute / closed-loop-test / closed-loop-final`;
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number, per_page: 100});
+            const existing = comments.find(c => c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body});
+            }

@@ -1,0 +1,42 @@
+rules:
+  - id: FRAME_LOOP_PRINT
+    severity: P1
+    checker: frame_loop_print
+    pattern: "print\\("
+    message: "프레임/입력 루프 경로의 print 로그 사용"
+    enabled: true
+
+  - id: OVERSIZED_FILE
+    severity: P2
+    checker: oversized_file
+    pattern: ">500_lines"
+    message: "과대 파일(500 라인 초과)"
+    enabled: true
+
+  - id: UNUSED_DECLARATION_CANDIDATE
+    severity: P3
+    checker: unused_declaration_candidate
+    pattern: "single_reference_symbol"
+    message: "미사용 선언 후보"
+    enabled: true
+
+  - id: MISSING_CORE_TESTS
+    severity: P2
+    checker: missing_core_tests
+    pattern: "core_type_without_test"
+    message: "핵심 타입 대비 테스트 부재"
+    enabled: true
+
+  - id: XCODEBUILD_LIST_FAILED
+    severity: P1
+    checker: xcodebuild_list
+    pattern: "xcodebuild -list"
+    message: "xcodebuild -list 실패"
+    enabled: true
+
+  - id: XCODEBUILD_TEST_FAILED
+    severity: P1
+    checker: xcodebuild_test
+    pattern: "xcodebuild test"
+    message: "xcodebuild test 실패"
+    enabled: true

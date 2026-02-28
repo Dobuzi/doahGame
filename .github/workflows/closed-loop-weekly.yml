@@ -1,0 +1,70 @@
+name: closed-loop-weekly
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  weekly-loop:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run full closed loop
+        run: make loop-all
+      - name: Upload weekly artifact bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: closed-loop-weekly
+          path: .pipeline/output/*
+          retention-days: 14
+      - name: Create issue when blocked
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const {owner, repo} = context.repo;
+            const statusPath = '.pipeline/output/final-status.txt';
+            const reportPath = '.pipeline/output/final-report.md';
+            if (!fs.existsSync(statusPath)) {
+              core.info('No final status file, skip issue creation');
+              return;
+            }
+            const status = fs.readFileSync(statusPath, 'utf8').trim();
+            if (status !== 'BLOCKED') {
+              core.info(`Status is ${status}, skip issue creation`);
+              return;
+            }
+
+            const ensureLabel = async (name, color, description) => {
+              try {
+                await github.rest.issues.getLabel({owner, repo, name});
+              } catch (e) {
+                if (e.status === 404) {
+                  await github.rest.issues.createLabel({owner, repo, name, color, description});
+                } else {
+                  throw e;
+                }
+              }
+            };
+
+            await ensureLabel('tech-debt', 'C5DEF5', 'Technical debt backlog');
+            await ensureLabel('closed-loop', 'F9D0C4', 'Created by closed loop pipeline');
+
+            const report = fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : 'No final report generated.';
+            const date = new Date().toISOString().slice(0, 10);
+            const title = `[Closed Loop] BLOCKED - ${date}`;
+            const body = `Weekly closed-loop run is BLOCKED.\n\n${report}\n\nArtifacts: closed-loop-weekly`;
+
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+              labels: ['tech-debt', 'closed-loop'],
+            });
